@@ -4,6 +4,7 @@ import gradio as gr
 from ktem.app import BasePage
 from ktem.db.models import User, engine
 from sqlmodel import Session, select
+from starlette.responses import RedirectResponse
 
 fetch_creds = """
 function() {
@@ -31,10 +32,26 @@ class LoginPage(BasePage):
         self.on_building_ui()
 
     def on_building_ui(self):
-        gr.Markdown(f"# Welcome to {self._app.app_name}!")
+        gr.Markdown(f"# Welcome to MDACA PrivateGPT!")
         self.usn = gr.Textbox(label="Username", visible=False)
         self.pwd = gr.Textbox(label="Password", type="password", visible=False)
-        self.btn_login = gr.Button("Login", visible=False)
+        self.btn_login = gr.Button("Login", visible=False, elem_id="button")
+        def greet(request: gr.Request):
+            self.username = request.username
+            return None
+        with gr.Blocks() as main_demo:
+            gr.Button("Logout", link="/logout")
+            # Adding custom JavaScript to modify the page
+            gr.HTML("""
+            <script>
+                function loginbuttonclick() {
+                    document.getElementById("button").click();
+                }
+                window.onload = loginbuttonclick;
+            </script>
+            """)
+            main_demo.load(greet, None, self.usn)
+
 
     def on_register_events(self):
         onSignIn = gr.on(
@@ -87,17 +104,25 @@ class LoginPage(BasePage):
 
     def login(self, usn, pwd):
         if not usn or not pwd:
-            return None, usn, pwd
+            with Session(engine) as session:
+                stmt = select(User).where(
+                    User.username_lower == self.username.lower().strip()
+                )
+                result = session.exec(stmt).all()
+                if result:
+                    return result[0].id, "", ""
 
-        hashed_password = hashlib.sha256(pwd.encode()).hexdigest()
-        with Session(engine) as session:
-            stmt = select(User).where(
-                User.username_lower == usn.lower().strip(),
-                User.password == hashed_password,
-            )
-            result = session.exec(stmt).all()
-            if result:
-                return result[0].id, "", ""
+                gr.Warning("Invalid email address, please ask an admin to add you")
+                return None, usn, pwd
+        else:
+            hashed_password = hashlib.sha256(pwd.encode()).hexdigest()
+            with Session(engine) as session:
+                stmt = select(User).where(
+                    User.username_lower == usn.lower().strip(),
+                    User.password == hashed_password,
+                )
+                result = session.exec(stmt).all()
+                if result:
+                    return result[0].id, "", ""
 
-            gr.Warning("Invalid username or password")
-            return None, usn, pwd
+                gr.Warning("Invalid username or password")
