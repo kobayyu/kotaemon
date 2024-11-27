@@ -40,10 +40,7 @@ class Render:
     def collapsible(header, content, open: bool = False) -> str:
         """Render an HTML friendly collapsible section"""
         o = " open" if open else ""
-        return (
-            f"<details class='evidence' {o}><summary>"
-            f"{header}</summary>{content}</details><br>"
-        )
+        return f"<details{o}><summary>{header}</summary>{content}</details><br>"
 
     @staticmethod
     def table(text: str) -> str:
@@ -78,6 +75,7 @@ class Render:
         if not highlight_text:
             try:
                 lang = detect(text.replace("\n", " "))["lang"]
+                print("lang", lang)
                 if lang not in ["ja", "cn"]:
                     highlight_words = [
                         t[:-1] if t.endswith("-") else t for t in text.split("\n")
@@ -85,11 +83,10 @@ class Render:
                     highlight_text = highlight_words[0]
                     phrase = "true"
                 else:
+                    highlight_text = text.replace("\n", "")
                     phrase = "false"
 
-                highlight_text = (
-                    text.replace("\n", "").replace('"', "").replace("'", "")
-                )
+                print("highlight_text", highlight_text, phrase)
             except Exception as e:
                 print(e)
                 highlight_text = text
@@ -98,16 +95,15 @@ class Render:
 
         return f"""
         {html_content}
-        <a href="#" class="pdf-link" data-src="/file={pdf_path}" data-page="{page_idx}" data-search="{highlight_text}" data-phrase="{phrase}">
+        <a href="#" class="pdf-link" data-src="/mdaca-privategpt/file={pdf_path}" data-page="{page_idx}" data-search="{highlight_text}" data-phrase="{phrase}">
             [Preview]
         </a>
         """  # noqa
 
     @staticmethod
-    def highlight(text: str, elem_id: str | None = None) -> str:
+    def highlight(text: str) -> str:
         """Highlight text"""
-        id_text = f" id='mark-{elem_id}'" if elem_id else ""
-        return f"<mark{id_text}>{text}</mark>"
+        return f"<mark>{text}</mark>"
 
     @staticmethod
     def image(url: str, text: str = "") -> str:
@@ -156,9 +152,9 @@ class Render:
             if doc.metadata.get("llm_trulens_score") is not None
             else 0.0
         )
-        reranking_score = (
-            round(doc.metadata["reranking_score"], 2)
-            if doc.metadata.get("reranking_score") is not None
+        cohere_reranking_score = (
+            round(doc.metadata["cohere_reranking_score"], 2)
+            if doc.metadata.get("cohere_reranking_score") is not None
             else 0.0
         )
         item_type_prefix = doc.metadata.get("type", "")
@@ -166,22 +162,15 @@ class Render:
         if item_type_prefix:
             item_type_prefix += " from "
 
-        if llm_reranking_score > 0:
-            relevant_score = llm_reranking_score
-        elif reranking_score > 0:
-            relevant_score = reranking_score
-        else:
-            relevant_score = 0.0
-
         rendered_score = Render.collapsible(
-            header=f"<b>&emsp;Relevance score</b>: {relevant_score:.1f}",
+            header=f"<b>&emsp;Relevance score</b>: {llm_reranking_score}",
             content="<b>&emsp;&emsp;Vectorstore score:</b>"
             f" {vectorstore_score}"
             f"{text_search_str}"
             "<b>&emsp;&emsp;LLM relevant score:</b>"
             f" {llm_reranking_score}<br>"
             "<b>&emsp;&emsp;Reranking score:</b>"
-            f" {reranking_score}<br>",
+            f" {cohere_reranking_score}<br>",
         )
 
         text = doc.text if not override_text else override_text
